@@ -5,58 +5,223 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Video Player</title>
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 12px; background: #0f1115; color: #fff;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: #0f1115;
-      color: #f2f4f8;
     }
-    .card {
-      width: 100%;
-      max-width: 900px;
-      background: #181b22;
-      border: 1px solid #262b36;
-      border-radius: 16px;
-      padding: 16px;
-    }
-    h1 { margin: 0 0 12px; font-size: 1.3rem; }
+    .wrap { width: 100%; max-width: 960px; }
     .player {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border-radius: 12px;
-      overflow: hidden;
-      background: #000;
+      position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000;
+      border-radius: 12px; overflow: hidden; user-select: none; touch-action: manipulation;
     }
-    .player iframe {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
+    .player:fullscreen { border-radius: 0; aspect-ratio: auto; }
+    video, iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+    video { object-fit: contain; }
+    .hidden { display: none !important; }
+
+    .big {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 68px; height: 68px; border-radius: 50%; border: 0;
+      background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: opacity .2s;
     }
+    .big svg { width: 32px; height: 32px; fill: #fff; }
+    .spin {
+      position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+      border: 4px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%;
+      animation: r .8s linear infinite; pointer-events: none;
+    }
+    @keyframes r { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: absolute; top: 14%; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.65); padding: 6px 14px; border-radius: 20px;
+      font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+
+    .bar {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 10px 8px;
+      background: linear-gradient(transparent, rgba(0,0,0,.8));
+      transition: opacity .25s;
+    }
+    .player.idle .bar, .player.idle .big { opacity: 0; pointer-events: none; }
+    .player.idle { cursor: none; }
+
+    .seek, .vol { -webkit-appearance: none; appearance: none; background: transparent; margin: 0; cursor: pointer; }
+    .seek { width: 100%; height: 22px; display: block; }
+    .seek::-webkit-slider-runnable-track, .vol::-webkit-slider-runnable-track {
+      height: 4px; border-radius: 2px;
+      background: linear-gradient(to right, #5b7cff var(--p, 0%), rgba(255,255,255,.3) var(--p, 0%));
+    }
+    .seek::-moz-range-track, .vol::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,.3); }
+    .seek::-moz-range-progress, .vol::-moz-range-progress { height: 4px; border-radius: 2px; background: #5b7cff; }
+    .seek::-webkit-slider-thumb, .vol::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #fff;
+    }
+    .seek::-moz-range-thumb, .vol::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+    .vol { width: 80px; height: 22px; }
+
+    .row { display: flex; align-items: center; gap: 4px; }
+    .row .sp { flex: 1; }
+    .btn {
+      background: none; border: 0; color: #fff; min-width: 40px; height: 40px; padding: 0 6px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px;
+      font-size: .9rem; font-weight: 600;
+    }
+    .btn:hover { background: rgba(255,255,255,.15); }
+    .btn svg { width: 24px; height: 24px; fill: #fff; }
+    .time { font-size: .85rem; padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    @media (max-width: 560px) { .vol { display: none; } .btn { min-width: 36px; } }
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1>Video Player</h1>
-    <div class="player">
-      <iframe id="frame" allow="autoplay; fullscreen" allowfullscreen></iframe>
+  <div class="wrap">
+    <div class="player" id="player">
+      <video id="v" playsinline preload="metadata"></video>
+      <iframe id="frame" class="hidden" allow="autoplay; fullscreen" allowfullscreen></iframe>
+      <div class="spin" id="spin"></div>
+      <div class="toast" id="toast"></div>
+      <button class="big hidden" id="big" aria-label="Play"></button>
+
+      <div class="bar" id="bar">
+        <input class="seek" id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+        <div class="row">
+          <button class="btn" id="play" aria-label="Play or pause"></button>
+          <button class="btn" id="mute" aria-label="Mute"></button>
+          <input class="vol" id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+          <span class="time" id="time">0:00 / 0:00</span>
+          <span class="sp"></span>
+          <button class="btn" id="speed" aria-label="Speed">1x</button>
+          <button class="btn" id="fs" aria-label="Fullscreen"></button>
+        </div>
+      </div>
     </div>
-  </main>
+  </div>
 
   <script>
     // Change only this ID to play a different video
     const FILE_ID = "1qjnn3_kHcHN6kjW9W0dDSHNdpg8Z8Ac7";
 
-    document.getElementById("frame").src =
-      "https://drive.google.com/file/d/" + FILE_ID + "/preview";
+    const $ = (id) => document.getElementById(id);
+    const player = $("player"), v = $("v"), frame = $("frame"), bar = $("bar"), big = $("big");
+    const seek = $("seek"), vol = $("vol"), spin = $("spin"), toast = $("toast");
+
+    const I = {
+      play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+      pause: '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>',
+      vol: '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg>',
+      mute: '<svg viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.5 2.5V12zM19 12a7 7 0 0 1-.8 3.2l1.5 1.5A9 9 0 0 0 21 12a9 9 0 0 0-7-8.8v2.1A7 7 0 0 1 19 12zM4.3 3 3 4.3 7.7 9H3v6h4l5 5v-6.7l4.2 4.2c-.7.5-1.4.9-2.2 1.2v2.1a9 9 0 0 0 3.5-1.8l2.2 2.2 1.3-1.3L4.3 3zM12 4 9.9 6.1 12 8.2V4z"/></svg>',
+      fs: '<svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 0h2v5h-5v-2h3v-3z"/></svg>'
+    };
+    big.innerHTML = I.play; $("play").innerHTML = I.play; $("mute").innerHTML = I.vol; $("fs").innerHTML = I.fs;
+
+    const fmt = (s) => {
+      if (!isFinite(s)) return "0:00";
+      s = Math.floor(s);
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = String(s % 60).padStart(2, "0");
+      return h ? h + ":" + String(m).padStart(2, "0") + ":" + x : m + ":" + x;
+    };
+    const setFill = (el, pct) => el.style.setProperty("--p", pct + "%");
+    let toastT;
+    const say = (t) => { toast.textContent = t; toast.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove("show"), 700); };
+
+    // ---------- Load: try direct video, fall back to Drive player ----------
+    let fellBack = false, scrubbing = false;
+    function fallback() {
+      if (fellBack) return;
+      fellBack = true;
+      v.pause(); v.removeAttribute("src"); v.load();
+      v.classList.add("hidden"); bar.classList.add("hidden"); big.classList.add("hidden"); spin.classList.add("hidden");
+      frame.classList.remove("hidden");
+      frame.src = "https://drive.google.com/file/d/" + FILE_ID + "/preview";
+    }
+    v.src = "https://drive.usercontent.google.com/download?id=" + FILE_ID + "&export=download&confirm=t";
+    const loadTimer = setTimeout(() => { if (!v.readyState) fallback(); }, 9000);
+    v.addEventListener("error", fallback);
+    v.addEventListener("loadedmetadata", () => { clearTimeout(loadTimer); spin.classList.add("hidden"); big.classList.remove("hidden"); update(); });
+
+    // ---------- Controls ----------
+    const toggle = () => (v.paused ? v.play().catch(fallback) : v.pause());
+    const skip = (s) => { v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + s)); say((s > 0 ? "+" : "") + s + "s"); };
+
+    function update() {
+      if (!scrubbing && v.duration) { seek.value = (v.currentTime / v.duration) * 1000; setFill(seek, seek.value / 10); }
+      $("time").textContent = fmt(v.currentTime) + " / " + fmt(v.duration);
+    }
+    (function loop() { if (!v.paused) update(); requestAnimationFrame(loop); })();
+
+    v.addEventListener("play", () => { $("play").innerHTML = I.pause; big.innerHTML = I.pause; big.classList.add("hidden"); poke(); });
+    v.addEventListener("pause", () => { $("play").innerHTML = I.play; big.innerHTML = I.play; big.classList.remove("hidden"); player.classList.remove("idle"); });
+    v.addEventListener("waiting", () => spin.classList.remove("hidden"));
+    v.addEventListener("playing", () => spin.classList.add("hidden"));
+    v.addEventListener("canplay", () => spin.classList.add("hidden"));
+    v.addEventListener("seeked", update);
+
+    $("play").onclick = toggle;
+    big.onclick = toggle;
+
+    seek.addEventListener("input", () => {
+      scrubbing = true; setFill(seek, seek.value / 10);
+      if (v.duration) $("time").textContent = fmt((seek.value / 1000) * v.duration) + " / " + fmt(v.duration);
+    });
+    seek.addEventListener("change", () => { if (v.duration) v.currentTime = (seek.value / 1000) * v.duration; scrubbing = false; });
+
+    vol.addEventListener("input", () => { v.volume = vol.value; v.muted = v.volume === 0; setFill(vol, vol.value * 100); });
+    v.addEventListener("volumechange", () => { $("mute").innerHTML = v.muted || v.volume === 0 ? I.mute : I.vol; });
+    $("mute").onclick = () => { v.muted = !v.muted; };
+    setFill(vol, 100);
+
+    const speeds = [1, 1.25, 1.5, 2, 0.5, 0.75];
+    $("speed").onclick = () => {
+      const n = speeds[(speeds.indexOf(v.playbackRate) + 1) % speeds.length];
+      v.playbackRate = n; $("speed").textContent = n + "x"; say("Speed " + n + "x");
+    };
+
+    function fullscreen() {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else if (player.requestFullscreen) player.requestFullscreen();
+      else if (player.webkitRequestFullscreen) player.webkitRequestFullscreen();
+      else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen(); // iPhone
+    }
+    $("fs").onclick = fullscreen;
+
+    // ---------- Tap / click: single = play or pause, double on sides = skip 10s ----------
+    let lastTap = 0, tapTimer;
+    v.addEventListener("click", (e) => {
+      const r = v.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, now = Date.now();
+      if (now - lastTap < 300) {
+        clearTimeout(tapTimer); lastTap = 0;
+        if (x < 0.33) skip(-10); else if (x > 0.66) skip(10); else fullscreen();
+      } else {
+        lastTap = now;
+        tapTimer = setTimeout(() => { if (player.classList.contains("idle")) poke(); else toggle(); }, 280);
+      }
+    });
+
+    // ---------- Auto hide controls ----------
+    let idleT;
+    function poke() {
+      player.classList.remove("idle"); clearTimeout(idleT);
+      if (!v.paused) idleT = setTimeout(() => player.classList.add("idle"), 2500);
+    }
+    ["mousemove", "touchstart", "keydown"].forEach((ev) => player.addEventListener(ev, poke, { passive: true }));
+
+    // ---------- Keyboard (PC) ----------
+    document.addEventListener("keydown", (e) => {
+      if (fellBack || e.target.tagName === "INPUT" && e.target.type === "text") return;
+      const k = e.key.toLowerCase();
+      if (k === " " || k === "k") { e.preventDefault(); toggle(); }
+      else if (k === "arrowright") skip(5);
+      else if (k === "arrowleft") skip(-5);
+      else if (k === "arrowup") { e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); vol.value = v.volume; setFill(vol, v.volume * 100); say("Volume " + Math.round(v.volume * 100) + "%"); }
+      else if (k === "arrowdown") { e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); vol.value = v.volume; setFill(vol, v.volume * 100); say("Volume " + Math.round(v.volume * 100) + "%"); }
+      else if (k === "m") v.muted = !v.muted;
+      else if (k === "f") fullscreen();
+    });
   </script>
 </body>
 </html>
