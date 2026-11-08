@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Player</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0f1115;
+      color: #f2f4f8;
+    }
+    .card {
+      width: 100%;
+      max-width: 900px;
+      background: #181b22;
+      border: 1px solid #262b36;
+      border-radius: 16px;
+      padding: 16px;
+    }
+    h1 { margin: 0 0 12px; font-size: 1.3rem; }
+    .player {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+    .player iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Video Player</h1>
+    <div class="player">
+      <iframe id="frame" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    </div>
+  </main>
+
+  <script>
+    // Change only this ID to play a different video
+    const FILE_ID = "1qjnn3_kHcHN6kjW9W0dDSHNdpg8Z8Ac7";
+
+    document.getElementById("frame").src =
+      "https://drive.google.com/file/d/" + FILE_ID + "/preview";
+  </script>
+</body>
+</html>
